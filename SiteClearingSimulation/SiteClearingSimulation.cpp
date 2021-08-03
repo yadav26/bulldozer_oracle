@@ -12,11 +12,11 @@
 using namespace std;
 struct directionblock
 {
-    int li;//left
-    int ri;//right
-    int fi;//forward
-    int bi;//backward
-    char type;
+    int li=-1;//left
+    int ri=-1;//right
+    int fi=-1;//forward
+    int bi=-1;//backward
+    char type = 'o';
     int bIsvisited;
     directionblock() :bIsvisited(false) {}
 };
@@ -93,9 +93,9 @@ struct bulldozer
         {
             if (ground2clean[gid].blockdata[dir].fi == OUT_OF_BOUNDARY)
             {
-                cout << "\nvalidatedstinbounday:OUT_OF_BOUNDARY \n";
-                throw("OUT_OF_BOUNDARY persued.");//
-                return false;
+                //cout << "\nvalidatedstinbounday:OUT_OF_BOUNDARY \n";
+                throw(string("OUT_OF_BOUNDARY persued."));//
+                //return false;
             }
             gid = ground2clean[gid].blockdata[dir].fi;
             --steps;
@@ -126,12 +126,12 @@ struct bulldozer
             steps = steps - 1;
             if (ground2clean[0].blockdata[dir].type == 'T')
             {
-                cout << "\nFirst move is blocked. gid = " << gid << ", block has protected tree\n";
-                throw("...oops PROTECTED_TREE on first move");
+                //cout << "\nFirst move is blocked. gid = " << gid << ", block has protected tree\n";
+                throw(string("...oops PROTECTED_TREE on first move"));
             }
             else if (ground2clean[0].blockdata[dir].type == 't' || ground2clean[0].blockdata[dir].type == 'r')
             {
-                cout << "\nFirst move is tree gid = " << gid << ", paint damage cost : " << creditCost["damageRepair"];
+                //cout << "\nFirst move is tree gid = " << gid << ", paint damage cost : " << creditCost["damageRepair"];
                 firstmovecost += creditCost["damageRepair"];
             }
             else
@@ -140,7 +140,7 @@ struct bulldozer
                 //plain land 'o'
                 //top up the cost by cleaning cost of the block
                 firstmovecost += fuelUsage[ground2clean[0].blockdata[dir].type];
-                cout << "\nFirst move is clear gid = " << gid << ", cost : " << fuelUsage[ground2clean[0].blockdata[dir].type];
+                //cout << "\nFirst move is clear gid = " << gid << ", cost : " << fuelUsage[ground2clean[0].blockdata[dir].type];
 
             }
             setblockisvisited(ground2clean, 0);
@@ -148,31 +148,38 @@ struct bulldozer
         cmdstack.push(is.str());
         cmdQ.emplace_back(is.str());
 
-        auto cost = findcost(ground2clean, steps);
-        cost.fuelCost += firstmovecost;
-        cout << "\ncmd = " << req << ", fuelcost : " << cost.fuelCost << ", damageRepair :" << cost.damageRepair;
-
+        auto cost = findcost(ground2clean, steps, firstmovecost);
+        //cost.fuelCost += firstmovecost;
+        //cout << "\ncmd = " << req << ", fuelcost : " << cost.fuelCost << ", damageRepair :" << cost.damageRepair;
         cmdcost.emplace_back(cost);
     }
-
-    tcmdCost findcost(std::map <int, squarblock>& ground2clean, int steps)
+    tcmdCost findcost(std::map <int, squarblock>& ground2clean, int steps, int firstmovecost)
     {
         int loss = 0;
-        int fuelcost = 0;
+        int fuelcost = firstmovecost;
         int ptree = 0;
         //invalidate the move if steps takes bulldozer out of range
-        validatedstinbounday(ground2clean, steps);
+        //validatedstinbounday(ground2clean, steps);
         int currpos = gid;
         int nextpos = ground2clean[gid].blockdata[dir].fi;
         while (steps > 0 )
         {
+            if (ground2clean[gid].blockdata[dir].fi == OUT_OF_BOUNDARY)
+            {
+                tcmdCost cc(loss, fuelcost, ptree);
+                cmdcost.emplace_back(cc);
+                throw(string("OUT_OF_BOUNDARY persued."));//
+            }
             gid = ground2clean[gid].blockdata[dir].fi;
             //if not a protected tree 
             if (ground2clean[gid].blockdata[dir].type == 'T')
             {
-                cout << "\ngid = " << gid << ", block has protected tree\n";
+                //cout << "\ngid = " << gid << ", block has protected tree\n";
                 ptree = creditCost["destProtectedTree"];
-                throw("...oops PROTECTED_TREE");
+                tcmdCost cc(loss, fuelcost, ptree);
+                cmdcost.emplace_back(cc);
+
+                throw(string("...oops PROTECTED_TREE"));
             }
             else if (ground2clean[gid].blockdata[dir].type == 't' )
             {
@@ -181,20 +188,20 @@ struct bulldozer
                     loss += creditCost["damageRepair"];
                 }
                 fuelcost += fuelUsage['t'];
-                cout << "\ngid = " << gid << ", paint damage cost : " << creditCost["damageRepair"] << ", fuelcost : " << fuelcost;
+                //cout << "\ngid = " << gid << ", paint damage cost : " << creditCost["damageRepair"] << ", fuelcost : " << fuelcost;
 
             }
             else if (ground2clean[gid].blockdata[dir].type == 'r')
             {
                 fuelcost += fuelUsage['r'];
-                cout << "\ngid = " << gid << ", rock cost : " << fuelcost;
+                //cout << "\ngid = " << gid << ", rock cost : " << fuelcost;
             }
             else
             {
                 //plain land 'o'
                 //top up the cost by cleaning cost of the block
                 fuelcost += fuelUsage[ground2clean[gid].blockdata[dir].type];
-                cout << "\ngid = " << gid << ", plain cost : " << fuelcost;
+                //cout << "\ngid = " << gid << ", plain cost : " << fuelcost;
             }
 
             //we moved ahead by 1
@@ -223,7 +230,6 @@ struct bulldozer
         }
         return f;
     }
-
     int getdamageRepair()
     {
         int f = 0;
@@ -233,7 +239,6 @@ struct bulldozer
         }
         return f;
     }
-
     int getptreecost()
     {
         int f = 0;
@@ -243,7 +248,6 @@ struct bulldozer
         }
         return f;
     }
-
     void printinstructions()
     {
         for (auto itr = cmdQ.begin(); itr != cmdQ.end(); ++itr)
@@ -458,14 +462,14 @@ int printTotal()
 }
 void printinstructions()
 {
-    cout << "\n\nThe simulation has ended at your request. These are the commands  you issued : \n";
+    cout << "\n\nThe simulation has ended at your request. These are the commands  you issued : \n\n";
     gUniqueBulldozer.printinstructions();
 
 }
 int getUnclearBlocks(std::map <int, squarblock>& g2c)
 {
     int uc = 0;
-    for (int x = 0; x < g2c.size(); ++x)
+    for (unsigned int x = 0; x < g2c.size(); ++x)
     {
         if (g2c[x].blockdata[0].type == 'T' || g2c[x].blockdata[0].bIsvisited )
             continue;
@@ -473,8 +477,22 @@ int getUnclearBlocks(std::map <int, squarblock>& g2c)
     }
     return uc;
 }
-
-
+int maxw = 0, maxd = 0;
+void printFinalClearLand(std::map <int, squarblock>& g2c)
+{
+    for (int i = 0; i < maxd; ++i)
+    {
+        cout << "\n";
+        for (int j = 0; j < maxw; ++j)
+        {
+            int gid = i * maxw + j;
+            if (g2c[gid].blockdata[0].bIsvisited)
+                cout << " X ";
+            else
+                cout <<" " << g2c[gid].blockdata[0].type << " ";
+        }
+    }
+}
 void reportgeneration(std::map <int, squarblock>&g2c)
 {
     auto w = std::setw(29);   
@@ -485,7 +503,7 @@ void reportgeneration(std::map <int, squarblock>&g2c)
     cout << "\n\nThe costs for this land clearing operation were:\n";
 
     cout << sw << std::left << "\nItem " << std::right <<wb<<"Quantity"<< wb <<"Cost";
-
+    std::cout << sw << "\n" << std::string(56, '=') << '\n';
     cout << sw << std::left << "\ncommunication overhead" << std::right; std::cout << wb << gUniqueBulldozer.getCmdCnt(); std::cout << wb << gUniqueBulldozer.getCmdCnt();
     total += gUniqueBulldozer.getCmdCnt();
     
@@ -501,15 +519,13 @@ void reportgeneration(std::map <int, squarblock>&g2c)
     cout << sw << std::left << "\npaint damage to bulldozer" << std::right; std::cout << wb << gUniqueBulldozer.getdamageRepair()/ creditCost["damageRepair"]; std::cout << wb << gUniqueBulldozer.getdamageRepair();
     total += gUniqueBulldozer.getdamageRepair();
 
-    cout << "\n-------";
+    std::cout << sw << "\n" << std::string(56, '-') << '\n';
 
     cout << sw << std::left << "\nTotal" << std::right << wb << "        " << wb << total;
 
     cout << "\n\n\nThankyou for using the Aconex site clearing simulator.\n";
 
 }
-
-
 void createground(string fp)
 {
     std::cout << "Welcome to the Aconex site clearing simulator. \nThis is a map of the site : ";
@@ -521,7 +537,7 @@ void createground(string fp)
         int gid = 0;
         int maxD = 0;
         std::vector<string> vin;
-        int maxw, maxd;
+        
         while (getline(myfile, line))
         {
             vin.emplace_back(line);
@@ -563,12 +579,10 @@ void createground(string fp)
         cout << "Unable to open file : " << fp;
 
 }
-
 void movebulldozer(std::map <int, squarblock>& g2c, string input, int steps)
 {
     gUniqueBulldozer.advance(g2c, input, steps);
 }
-
 void changebulldozerdirectiontoleft()
 {
     gUniqueBulldozer.turnleft();
@@ -595,7 +609,6 @@ void processCmd(std::map <int, squarblock>& g2c, string input)
         if (steps.length() > 21)
             return;
         long long nstep = stoll(steps);
-        cout << "\nadvance " << nstep << endl;
         movebulldozer(g2c, input, nstep);
     }
     else if (cmd == "q")
@@ -608,9 +621,6 @@ void processCmd(std::map <int, squarblock>& g2c, string input)
         cout << "invalid cmd";
     }
 }
-
-
-
 int main(int argc, char**argv) 
 {
     createground(argv[1]);
@@ -618,15 +628,27 @@ int main(int argc, char**argv)
     auto g2c = ground;
 
     std::string input;
-
-    do 
+    try 
     {
-        std::cout << "\n(l)eft, (r)ight, (a)dvance <n>, (q)uit: ";
-        std::getline(std::cin, input);
+        do
+        {
+            std::cout << "\n(l)eft, (r)ight, (a)dvance <n>, (q)uit: ";
+            std::getline(std::cin, input);
 
-        processCmd(g2c, input);
+            processCmd(g2c, input);
 
-    } while (input != "q" );
+        } while (input != "q");
+
+    }
+    catch (string& s)
+    {
+        printinstructions();
+        reportgeneration(g2c);
+    }
+
+    printFinalClearLand(g2c);
 
     return 0;
 }
+//fixed case advance oob and hit by t
+//fixed case advance oob and hit by T
