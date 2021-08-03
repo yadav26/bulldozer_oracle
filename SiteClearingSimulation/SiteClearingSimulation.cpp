@@ -16,7 +16,9 @@ struct directionblock
     int ri;//right
     int fi;//forward
     int bi;//backward
-    int cost2clean;
+    char type;
+    int bIsvisited;
+    directionblock() :bIsvisited(false) {}
 };
 
 enum facing {
@@ -44,15 +46,23 @@ struct squarblock
 
 std::map <int, squarblock> ground;
 
-
+struct tcmdCost {
+    int damageRepair;
+    int fuelCost;
+    int ptree;
+    tcmdCost(int x, int y, int z):damageRepair(x), fuelCost(y), ptree(z){}
+};
 
 struct bulldozer 
 {
     int gid;
     int dir; // 0=e,1=s,2=w,3=n
-    bulldozer():dir(BULLDOZER_START_DIR), gid(-1){}
+    bulldozer():dir(BULLDOZER_START_DIR), gid(OUT_OF_BOUNDARY)
+    {
+    }
     stack<string> cmdstack;
-    vector<int> cmdcost;
+    vector<string> cmdQ;
+    vector<tcmdCost> cmdcost;
     void setdir(int d)
     {
         dir = d;
@@ -62,50 +72,186 @@ struct bulldozer
             dir = dir - 1;
         else
             dir = 3;
+
+        cmdstack.push("turn left");
+        cmdQ.emplace_back("turn left");
     }
     void turnright() {
         if (dir < 3)
             dir = dir + 1;
         else
             dir = 0;
+
+        cmdstack.push("turn right");
+        cmdQ.emplace_back("turn right");
+    }
+    bool validatedstinbounday(std::map <int, squarblock>& ground2clean, int steps)
+    {
+        int currpos = gid;
+        int currdir = dir;
+        while ( steps > 0)
+        {
+            if (ground2clean[gid].blockdata[dir].fi == OUT_OF_BOUNDARY)
+            {
+                cout << "\nvalidatedstinbounday:OUT_OF_BOUNDARY \n";
+                throw("OUT_OF_BOUNDARY persued.");//
+                return false;
+            }
+            gid = ground2clean[gid].blockdata[dir].fi;
+            --steps;
+        }
+
+        //restore position
+        gid = currpos;
+        dir = currdir;
+
+        return true;
+    }
+    void setblockisvisited(std::map <int, squarblock>& g2c, int gid)
+    {
+        g2c[gid].blockdata[0].bIsvisited = true;
+        g2c[gid].blockdata[1].bIsvisited = true;
+        g2c[gid].blockdata[2].bIsvisited = true;
+        g2c[gid].blockdata[3].bIsvisited = true;
     }
     void advance(std::map <int, squarblock>& ground2clean, string req, int steps)
     {//req "a 4"
+        stringstream is;
+        is << "advance " << steps;
+
+        int firstmovecost = 0;
         if (gid == -1 && cmdstack.empty())
         {//first move
             gid = 0;
+            steps = steps - 1;
+            if (ground2clean[0].blockdata[dir].type == 'T')
+            {
+                cout << "\nFirst move is blocked. gid = " << gid << ", block has protected tree\n";
+                throw("...oops PROTECTED_TREE on first move");
+            }
+            else if (ground2clean[0].blockdata[dir].type == 't' || ground2clean[0].blockdata[dir].type == 'r')
+            {
+                cout << "\nFirst move is tree gid = " << gid << ", paint damage cost : " << creditCost["damageRepair"];
+                firstmovecost += creditCost["damageRepair"];
+            }
+            else
+            {
+                //visitng
+                //plain land 'o'
+                //top up the cost by cleaning cost of the block
+                firstmovecost += fuelUsage[ground2clean[0].blockdata[dir].type];
+                cout << "\nFirst move is clear gid = " << gid << ", cost : " << fuelUsage[ground2clean[0].blockdata[dir].type];
+
+            }
+            setblockisvisited(ground2clean, 0);
         }
-        cmdstack.push(req);
-        int cost = findcost(ground2clean, steps);
+        cmdstack.push(is.str());
+        cmdQ.emplace_back(is.str());
+
+        auto cost = findcost(ground2clean, steps);
+        cost.fuelCost += firstmovecost;
+        cout << "\ncmd = " << req << ", fuelcost : " << cost.fuelCost << ", damageRepair :" << cost.damageRepair;
+
         cmdcost.emplace_back(cost);
     }
-    int findcost(std::map <int, squarblock>& ground2clean, int steps)
+
+    tcmdCost findcost(std::map <int, squarblock>& ground2clean, int steps)
     {
-        int cost = 0;
-        while (ground2clean[gid].blockdata[dir].fi != OUT_OF_BOUNDARY || steps > 0 )
+        int loss = 0;
+        int fuelcost = 0;
+        int ptree = 0;
+        //invalidate the move if steps takes bulldozer out of range
+        validatedstinbounday(ground2clean, steps);
+        int currpos = gid;
+        int nextpos = ground2clean[gid].blockdata[dir].fi;
+        while (steps > 0 )
         {
+            gid = ground2clean[gid].blockdata[dir].fi;
             //if not a protected tree 
-            if (ground2clean[gid].blockdata[dir].cost2clean == PROTECTED_TREE)
+            if (ground2clean[gid].blockdata[dir].type == 'T')
             {
                 cout << "\ngid = " << gid << ", block has protected tree\n";
+                ptree = creditCost["destProtectedTree"];
                 throw("...oops PROTECTED_TREE");
             }
+            else if (ground2clean[gid].blockdata[dir].type == 't' )
+            {
+                if (steps - 1 > 0) 
+                {//only if we have more steps to move, if this is stop , we only add fuelcost to clean
+                    loss += creditCost["damageRepair"];
+                }
+                fuelcost += fuelUsage['t'];
+                cout << "\ngid = " << gid << ", paint damage cost : " << creditCost["damageRepair"] << ", fuelcost : " << fuelcost;
 
-            //top up the cost by cleaning cost of the block
-            cost += ground2clean[gid].blockdata[dir].cost2clean;
-            //reduce the cost of the block to clear 
-            if (ground2clean[gid].blockdata[dir].cost2clean > PLAIN_LAND_COST)
-                ground2clean[gid].blockdata[dir].cost2clean = PLAIN_LAND_COST;
+            }
+            else if (ground2clean[gid].blockdata[dir].type == 'r')
+            {
+                fuelcost += fuelUsage['r'];
+                cout << "\ngid = " << gid << ", rock cost : " << fuelcost;
+            }
+            else
+            {
+                //plain land 'o'
+                //top up the cost by cleaning cost of the block
+                fuelcost += fuelUsage[ground2clean[gid].blockdata[dir].type];
+                cout << "\ngid = " << gid << ", plain cost : " << fuelcost;
+            }
 
             //we moved ahead by 1
             --steps;
             
             //move bulldozer to blockdata fi
-            gid = ground2clean[gid].blockdata[dir].fi;
+            setblockisvisited(ground2clean, gid);
         }
-        return cost;
+
+        //update the type of the block to clear 
+        ground2clean[gid].blockdata[dir].type = 'o';
+
+        tcmdCost cc(loss, fuelcost, ptree);
+        return std::move(cc);
+    }
+    int getCmdCnt()
+    {
+        return cmdQ.size();
+    }
+    int getfuelUsage()
+    {
+        int f = 0;
+        for (auto itr = cmdcost.begin(); itr != cmdcost.end(); ++itr)
+        {
+            f+= (*itr).fuelCost ;
+        }
+        return f;
     }
 
+    int getdamageRepair()
+    {
+        int f = 0;
+        for (auto itr = cmdcost.begin(); itr != cmdcost.end(); ++itr)
+        {
+            f += (*itr).damageRepair;
+        }
+        return f;
+    }
+
+    int getptreecost()
+    {
+        int f = 0;
+        for (auto itr = cmdcost.begin(); itr != cmdcost.end(); ++itr)
+        {
+            f += (*itr).ptree;
+        }
+        return f;
+    }
+
+    void printinstructions()
+    {
+        for (auto itr = cmdQ.begin(); itr != cmdQ.end(); ++itr)
+        {
+            cout << *itr << ", ";
+        }
+        cout << "quit" << endl;
+    }
 };
 
 
@@ -156,7 +302,6 @@ directionblock findallfourE(int dir, int gidx, int maxc, int maxr)
     db.ri = r;
     db.fi = f;
     db.bi = b;
-
     return std::move(db);
 
 }
@@ -314,34 +459,56 @@ int printTotal()
 void printinstructions()
 {
     cout << "\n\nThe simulation has ended at your request. These are the commands  you issued : \n";
+    gUniqueBulldozer.printinstructions();
+
 }
-void reportgeneration()
+int getUnclearBlocks(std::map <int, squarblock>& g2c)
+{
+    int uc = 0;
+    for (int x = 0; x < g2c.size(); ++x)
+    {
+        if (g2c[x].blockdata[0].type == 'T' || g2c[x].blockdata[0].bIsvisited )
+            continue;
+        ++uc;
+    }
+    return uc;
+}
+
+
+void reportgeneration(std::map <int, squarblock>&g2c)
 {
     auto w = std::setw(29);   
     auto wb = std::setw(12);  // for the numbers with more space between them
     auto sw = std::setw(31); // for titles 
+    int total = 0;
 
     cout << "\n\nThe costs for this land clearing operation were:\n";
 
     cout << sw << std::left << "\nItem " << std::right <<wb<<"Quantity"<< wb <<"Cost";
 
-    cout << sw << std::left << "\ncommunication overhead" << std::right; std::cout << wb << 12345678; std::cout << wb << 44445555;
+    cout << sw << std::left << "\ncommunication overhead" << std::right; std::cout << wb << gUniqueBulldozer.getCmdCnt(); std::cout << wb << gUniqueBulldozer.getCmdCnt();
+    total += gUniqueBulldozer.getCmdCnt();
+    
+    cout << sw << std::left << "\nfuel usage" << std::right; std::cout << wb << gUniqueBulldozer.getfuelUsage(); std::cout << wb << gUniqueBulldozer.getfuelUsage();
+    total += gUniqueBulldozer.getfuelUsage();
+    
+    cout << sw << std::left << "\nuncleared squares" << std::right; std::cout << wb << getUnclearBlocks(g2c); std::cout << wb << getUnclearBlocks(g2c) * creditCost["unclearland"];
+    total += getUnclearBlocks(g2c) * creditCost["unclearland"];
 
-    cout << sw << std::left << "\nfuel usage" << std::right;
+    cout << sw << std::left << "\ndestruction of protected tree" << std::right; std::cout << wb << gUniqueBulldozer.getptreecost() / creditCost["destProtectedTree"]; std::cout << wb << gUniqueBulldozer.getptreecost();
+    total += gUniqueBulldozer.getptreecost();
 
-    cout << sw << std::left << "\nuncleared squares" << std::right;
-
-    cout << sw << std::left << "\ndestruction of protected tree" << std::right;
-
-    cout << sw << std::left << "\npaint damage to bulldozer" << std::right;
+    cout << sw << std::left << "\npaint damage to bulldozer" << std::right; std::cout << wb << gUniqueBulldozer.getdamageRepair()/ creditCost["damageRepair"]; std::cout << wb << gUniqueBulldozer.getdamageRepair();
+    total += gUniqueBulldozer.getdamageRepair();
 
     cout << "\n-------";
 
-    cout << sw << std::left << "\nTotal" << std::right << wb << "        " << wb << printTotal();
+    cout << sw << std::left << "\nTotal" << std::right << wb << "        " << wb << total;
 
     cout << "\n\n\nThankyou for using the Aconex site clearing simulator.\n";
 
 }
+
 
 void createground(string fp)
 {
@@ -372,12 +539,10 @@ void createground(string fp)
             for (int j = 0; j < maxw; ++j)
             {
                 cout << "  " << ptr[j];
-                int cost = fuelUsage[ptr[j]];
-                cout << cost;
-                auto dbE = findallfourE(0, gid, maxw, maxd); dbE.cost2clean = cost;
-                auto dbS = findallfourS(1, gid, maxw, maxd); dbS.cost2clean = cost;
-                auto dbW = findallfourW(2, gid, maxw, maxd); dbW.cost2clean = cost;
-                auto dbN = findallfourN(3, gid, maxw, maxd); dbN.cost2clean = cost;
+                auto dbE = findallfourE(0, gid, maxw, maxd); dbE.type = ptr[j];
+                auto dbS = findallfourS(1, gid, maxw, maxd); dbS.type = ptr[j];
+                auto dbW = findallfourW(2, gid, maxw, maxd); dbW.type = ptr[j];
+                auto dbN = findallfourN(3, gid, maxw, maxd); dbN.type = ptr[j];
 
                 squarblock sqb;
                 sqb.blockdata[0] = dbE;
@@ -399,9 +564,9 @@ void createground(string fp)
 
 }
 
-void movebulldozer(int steps) 
+void movebulldozer(std::map <int, squarblock>& g2c, string input, int steps)
 {
-
+    gUniqueBulldozer.advance(g2c, input, steps);
 }
 
 void changebulldozerdirectiontoleft()
@@ -412,7 +577,7 @@ void changebulldozerdirectiontoright()
 {
     gUniqueBulldozer.turnright();
 }
-void processCmd(string input)
+void processCmd(std::map <int, squarblock>& g2c, string input)
 {
     string cmd = input.substr(0, input.find(" "));
 
@@ -431,12 +596,12 @@ void processCmd(string input)
             return;
         long long nstep = stoll(steps);
         cout << "\nadvance " << nstep << endl;
-        movebulldozer(nstep);
+        movebulldozer(g2c, input, nstep);
     }
     else if (cmd == "q")
     {
         printinstructions();
-        reportgeneration();
+        reportgeneration(g2c);
     }
     else
     {
@@ -449,18 +614,19 @@ void processCmd(string input)
 int main(int argc, char**argv) 
 {
     createground(argv[1]);
-  
+    //create copy
+    auto g2c = ground;
+
     std::string input;
 
     do 
     {
         std::cout << "\n(l)eft, (r)ight, (a)dvance <n>, (q)uit: ";
-        string input;
         std::getline(std::cin, input);
 
-        processCmd(input);
+        processCmd(g2c, input);
 
-    } while (input.find("q") != -1 );
+    } while (input != "q" );
 
     return 0;
 }
