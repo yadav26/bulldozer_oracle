@@ -7,6 +7,7 @@
 #include <string>
 #include <map>
 #include <vector>
+#include <stack>
 
 using namespace std;
 struct directionblock
@@ -15,30 +16,100 @@ struct directionblock
     int ri;//right
     int fi;//forward
     int bi;//backward
+    int cost2clean;
 };
 
 enum facing {
-    east,
-    south,
-    west,
-    north,
-    invalid
+    invalid=-1,
+    east=0,//0
+    south=1,//1
+    west=2,//2
+    north=3,//3
+    
 };
 
-std::map<string, int> fuelUsage = { {"c",1}, {"o",1}, {"r",2}, {"t",2}, {"T",-1} };
+constexpr int BULLDOZER_START_DIR = 0;
+constexpr int OUT_OF_BOUNDARY = -1;
+constexpr int PROTECTED_TREE = -2;
+constexpr int PLAIN_LAND_COST = 1;
+
+std::map<char, int> fuelUsage = { {'c',1}, {'o', PLAIN_LAND_COST}, {'r',2}, {'t',2}, {'T', PROTECTED_TREE} };
 std::map<string, int> creditCost = { {"c2b",1}, {"fuel",1}, {"unclearland", 3}, {"destProtectedTree", 10}, {"damageRepair", 2} };
 
 
 struct squarblock
 {
-    std::map<facing, directionblock> blockdata;//e=0,s=1,w=2,n=3
+    std::map<int, directionblock> blockdata;//e=0,s=1,w=2,n=3
 };
 
 std::map <int, squarblock> ground;
-struct bulldozer {
+
+
+
+struct bulldozer 
+{
     int gid;
-    int dir;
+    int dir; // 0=e,1=s,2=w,3=n
+    bulldozer():dir(BULLDOZER_START_DIR), gid(-1){}
+    stack<string> cmdstack;
+    vector<int> cmdcost;
+    void setdir(int d)
+    {
+        dir = d;
+    }
+    void turnleft() {
+        if (dir > 0)
+            dir = dir - 1;
+        else
+            dir = 3;
+    }
+    void turnright() {
+        if (dir < 3)
+            dir = dir + 1;
+        else
+            dir = 0;
+    }
+    void advance(std::map <int, squarblock>& ground2clean, string req, int steps)
+    {//req "a 4"
+        if (gid == -1 && cmdstack.empty())
+        {//first move
+            gid = 0;
+        }
+        cmdstack.push(req);
+        int cost = findcost(ground2clean, steps);
+        cmdcost.emplace_back(cost);
+    }
+    int findcost(std::map <int, squarblock>& ground2clean, int steps)
+    {
+        int cost = 0;
+        while (ground2clean[gid].blockdata[dir].fi != OUT_OF_BOUNDARY || steps > 0 )
+        {
+            //if not a protected tree 
+            if (ground2clean[gid].blockdata[dir].cost2clean == PROTECTED_TREE)
+            {
+                cout << "\ngid = " << gid << ", block has protected tree\n";
+                throw("...oops PROTECTED_TREE");
+            }
+
+            //top up the cost by cleaning cost of the block
+            cost += ground2clean[gid].blockdata[dir].cost2clean;
+            //reduce the cost of the block to clear 
+            if (ground2clean[gid].blockdata[dir].cost2clean > PLAIN_LAND_COST)
+                ground2clean[gid].blockdata[dir].cost2clean = PLAIN_LAND_COST;
+
+            //we moved ahead by 1
+            --steps;
+            
+            //move bulldozer to blockdata fi
+            gid = ground2clean[gid].blockdata[dir].fi;
+        }
+        return cost;
+    }
+
 };
+
+
+bulldozer gUniqueBulldozer;
 
 directionblock findallfourE(int dir, int gidx, int maxc, int maxr)
 {
@@ -48,14 +119,14 @@ directionblock findallfourE(int dir, int gidx, int maxc, int maxr)
     int col = gidx % maxc;
     if (col == 0)
     {
-        b = -1;
+        b = OUT_OF_BOUNDARY;
         f = gidx + 1;
     }
     else if (col + 1 >= maxc)
     {
         //we are right boundary
         b = gidx - 1;
-        f = -1;
+        f = OUT_OF_BOUNDARY;
     }
     else
     {
@@ -64,14 +135,14 @@ directionblock findallfourE(int dir, int gidx, int maxc, int maxr)
     }
     if (row == 0)
     {
-        l = -1;
+        l = OUT_OF_BOUNDARY;
         r = ((row +1)* maxc) + (gidx % maxc);
     }
     else if (row + 1 >= maxr)
     {
         //we are right boundary
         l = ((row - 1) * maxc) + (gidx % maxc);
-        r = -1;
+        r = OUT_OF_BOUNDARY;
     }
     else
     {
@@ -85,6 +156,7 @@ directionblock findallfourE(int dir, int gidx, int maxc, int maxr)
     db.ri = r;
     db.fi = f;
     db.bi = b;
+
     return std::move(db);
 
 }
@@ -101,13 +173,13 @@ directionblock findallfourS(int dir, int gidx, int maxc, int maxr)
     int col = gidx % maxc;
     if (col == 0)
     {
-        r = -1;
+        r = OUT_OF_BOUNDARY;
         l = gidx + 1;
     }
     else if (col + 1 >= maxc)
     {
         r = gidx -1;
-        l = -1;
+        l = OUT_OF_BOUNDARY;
     }
     else
     {
@@ -117,13 +189,13 @@ directionblock findallfourS(int dir, int gidx, int maxc, int maxr)
 
     if (row == 0)
     {
-        b = -1;
+        b = OUT_OF_BOUNDARY;
         f = ((row + 1) * maxc) + (gidx % maxc);
     }
     else if (row + 1 >= maxr)
     {
         b = ((row - 1) * maxc) + (gidx % maxc);
-        f = -1;
+        f = OUT_OF_BOUNDARY;
     }
     else
     {
@@ -146,14 +218,14 @@ directionblock findallfourW(int dir, int gidx, int maxc, int maxr)
     int col = gidx % maxc;
     if (col == 0)
     {
-        f = -1;
+        f = OUT_OF_BOUNDARY;
         b = gidx + 1;
     }
     else if (col + 1 >= maxc)
     {
         //we are right boundary
         f = gidx - 1;
-        b = -1;
+        b = OUT_OF_BOUNDARY;
     }
     else
     {
@@ -162,13 +234,13 @@ directionblock findallfourW(int dir, int gidx, int maxc, int maxr)
     }
     if (row == 0)
     {
-        r = -1;
+        r = OUT_OF_BOUNDARY;
         l = ((row + 1) * maxc) + (gidx % maxc);
     }
     else if (row + 1 >= maxr)
     {
         r = ((row - 1) * maxc) + (gidx % maxc);
-        l = -1;
+        l = OUT_OF_BOUNDARY;
     }
     else
     {
@@ -197,13 +269,13 @@ directionblock findallfourN(int dir, int gidx, int maxc, int maxr)
     int col = gidx % maxc;
     if (col == 0)
     {
-        l = -1;
+        l = OUT_OF_BOUNDARY;
         r = gidx + 1;
     }
     else if (col + 1 >= maxc)
     {
         l = gidx - 1;
-        r = -1;
+        r = OUT_OF_BOUNDARY;
     }
     else
     {
@@ -213,13 +285,13 @@ directionblock findallfourN(int dir, int gidx, int maxc, int maxr)
 
     if (row == 0)
     {
-        f = -1;
+        f = OUT_OF_BOUNDARY;
         b = ((row + 1) * maxc) + (gidx % maxc);
     }
     else if (row + 1 >= maxr)
     {
         f = ((row - 1) * maxc) + (gidx % maxc);
-        b = -1;
+        b = OUT_OF_BOUNDARY;
     }
     else
     {
@@ -235,33 +307,20 @@ directionblock findallfourN(int dir, int gidx, int maxc, int maxr)
     return std::move(db);
 }
 
+int printTotal() 
+{
+    return 1111111;
+}
 void printinstructions()
 {
     cout << "\n\nThe simulation has ended at your request. These are the commands  you issued : \n";
 }
 void reportgeneration()
 {
-    auto w = std::setw(29);   // for number like " 10.00" (6 chars)
+    auto w = std::setw(29);   
     auto wb = std::setw(12);  // for the numbers with more space between them
-    auto sw = std::setw(31); // for titles (math, chemistry)
+    auto sw = std::setw(31); // for titles 
 
-    //// print the numbers above
-    //cout << "         ";
-    //for (int i = 1; i <= 5; ++i) std::cout << w << i;
-    //std::cout << "     BEST    WORST  AVERAGE\n";
-
-    //// print a line of *
-    //std::cout << sw << "" << std::string(56, '*') << '\n';
-
-    //cout << std::setprecision(2) << std::fixed; // precision 2, fixed
-
-    //cout << sw << std::left << "Math" << std::right;
-    //for (auto ms : array[0]) std::cout << w << ms;
-    //cout << wb << math_best << wb << math_worse << wb << math_average << '\n';
-
-    //cout << sw << std::left << "Chemistry" << std::right;
-    //for (auto cs : array[1]) std::cout << w << cs;
-    //cout << wb << chemistry_best << wb << chemistry_worse << wb << chemistry_average << '\n';
     cout << "\n\nThe costs for this land clearing operation were:\n";
 
     cout << sw << std::left << "\nItem " << std::right <<wb<<"Quantity"<< wb <<"Cost";
@@ -278,7 +337,7 @@ void reportgeneration()
 
     cout << "\n-------";
 
-    cout << sw << std::left << "\nTotal" << std::right << wb << "        " << wb << 12345678;
+    cout << sw << std::left << "\nTotal" << std::right << wb << "        " << wb << printTotal();
 
     cout << "\n\n\nThankyou for using the Aconex site clearing simulator.\n";
 
@@ -310,20 +369,21 @@ void createground(string fp)
         for (int i = 0; i < maxd; ++i)
         {
             auto ptr = vin[i].c_str();
-            for (int j = 0; j < maxw; ++j)//auto itr = vi.begin(); itr != vi.end(); ++itr)
+            for (int j = 0; j < maxw; ++j)
             {
                 cout << "  " << ptr[j];
-
-                auto dbE = findallfourE(0, gid, maxw, maxd);
-                auto dbS = findallfourS(1, gid, maxw, maxd);
-                auto dbW = findallfourW(2, gid, maxw, maxd);
-                auto dbN = findallfourN(3, gid, maxw, maxd);
+                int cost = fuelUsage[ptr[j]];
+                cout << cost;
+                auto dbE = findallfourE(0, gid, maxw, maxd); dbE.cost2clean = cost;
+                auto dbS = findallfourS(1, gid, maxw, maxd); dbS.cost2clean = cost;
+                auto dbW = findallfourW(2, gid, maxw, maxd); dbW.cost2clean = cost;
+                auto dbN = findallfourN(3, gid, maxw, maxd); dbN.cost2clean = cost;
 
                 squarblock sqb;
-                sqb.blockdata[facing::east] = dbE;
-                sqb.blockdata[facing::south] = dbS;
-                sqb.blockdata[facing::west] = dbW;
-                sqb.blockdata[facing::north] = dbN;
+                sqb.blockdata[0] = dbE;
+                sqb.blockdata[1] = dbS;
+                sqb.blockdata[2] = dbW;
+                sqb.blockdata[3] = dbN;
 
                 ground[gid] = std::move(sqb);
                 ++gid;
@@ -346,11 +406,11 @@ void movebulldozer(int steps)
 
 void changebulldozerdirectiontoleft()
 {
-
+    gUniqueBulldozer.turnleft();
 }
 void changebulldozerdirectiontoright()
 {
-
+    gUniqueBulldozer.turnright();
 }
 void processCmd(string input)
 {
@@ -384,6 +444,8 @@ void processCmd(string input)
     }
 }
 
+
+
 int main(int argc, char**argv) 
 {
     createground(argv[1]);
@@ -396,11 +458,9 @@ int main(int argc, char**argv)
         string input;
         std::getline(std::cin, input);
 
-
         processCmd(input);
 
-
-    } while (input != "q");
+    } while (input.find("q") != -1 );
 
     return 0;
 }
