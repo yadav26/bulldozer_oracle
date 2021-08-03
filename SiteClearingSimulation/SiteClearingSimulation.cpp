@@ -1,13 +1,14 @@
 // SiteClearingSimulation.cpp : This file contains the 'main' function. Program execution begins and ends there.
 //
+#include <sstream>
 #include <iostream>
+#include <iomanip>
 #include <fstream>
 #include <string>
 #include <map>
 #include <vector>
 
 using namespace std;
-
 struct directionblock
 {
     int li;//left
@@ -16,7 +17,7 @@ struct directionblock
     int bi;//backward
 };
 
-enum facing{
+enum facing {
     east,
     south,
     west,
@@ -31,6 +32,12 @@ std::map<string, int> creditCost = { {"c2b",1}, {"fuel",1}, {"unclearland", 3}, 
 struct squarblock
 {
     std::map<facing, directionblock> blockdata;//e=0,s=1,w=2,n=3
+};
+
+std::map <int, squarblock> ground;
+struct bulldozer {
+    int gid;
+    int dir;
 };
 
 directionblock findallfourE(int dir, int gidx, int maxc, int maxr)
@@ -227,15 +234,62 @@ directionblock findallfourN(int dir, int gidx, int maxc, int maxr)
     db.bi = b;
     return std::move(db);
 }
-int main(int argc, char**argv) 
+
+void printinstructions()
 {
+    cout << "\n\nThe simulation has ended at your request. These are the commands  you issued : \n";
+}
+void reportgeneration()
+{
+    auto w = std::setw(29);   // for number like " 10.00" (6 chars)
+    auto wb = std::setw(12);  // for the numbers with more space between them
+    auto sw = std::setw(31); // for titles (math, chemistry)
 
-    std::cout <<"Welcome to the Aconex site clearing simulator. \nThis is a map of the site : ";
+    //// print the numbers above
+    //cout << "         ";
+    //for (int i = 1; i <= 5; ++i) std::cout << w << i;
+    //std::cout << "     BEST    WORST  AVERAGE\n";
 
-    std::map <int, squarblock> ground;
+    //// print a line of *
+    //std::cout << sw << "" << std::string(56, '*') << '\n';
+
+    //cout << std::setprecision(2) << std::fixed; // precision 2, fixed
+
+    //cout << sw << std::left << "Math" << std::right;
+    //for (auto ms : array[0]) std::cout << w << ms;
+    //cout << wb << math_best << wb << math_worse << wb << math_average << '\n';
+
+    //cout << sw << std::left << "Chemistry" << std::right;
+    //for (auto cs : array[1]) std::cout << w << cs;
+    //cout << wb << chemistry_best << wb << chemistry_worse << wb << chemistry_average << '\n';
+    cout << "\n\nThe costs for this land clearing operation were:\n";
+
+    cout << sw << std::left << "\nItem " << std::right <<wb<<"Quantity"<< wb <<"Cost";
+
+    cout << sw << std::left << "\ncommunication overhead" << std::right; std::cout << wb << 12345678; std::cout << wb << 44445555;
+
+    cout << sw << std::left << "\nfuel usage" << std::right;
+
+    cout << sw << std::left << "\nuncleared squares" << std::right;
+
+    cout << sw << std::left << "\ndestruction of protected tree" << std::right;
+
+    cout << sw << std::left << "\npaint damage to bulldozer" << std::right;
+
+    cout << "\n-------";
+
+    cout << sw << std::left << "\nTotal" << std::right << wb << "        " << wb << 12345678;
+
+    cout << "\n\n\nThankyou for using the Aconex site clearing simulator.\n";
+
+}
+
+void createground(string fp)
+{
+    std::cout << "Welcome to the Aconex site clearing simulator. \nThis is a map of the site : ";
 
     string line;
-    ifstream myfile(argv[1]);
+    ifstream myfile(fp);
     if (myfile.is_open())
     {
         int gid = 0;
@@ -244,7 +298,7 @@ int main(int argc, char**argv)
         int maxw, maxd;
         while (getline(myfile, line))
         {
-            vin.emplace_back( line);
+            vin.emplace_back(line);
             maxw = line.size();
         }
 
@@ -253,10 +307,10 @@ int main(int argc, char**argv)
         maxd = vin.size();
 
         cout << "\n\nB=)";
-        for(int i = 0; i < maxd; ++i)
+        for (int i = 0; i < maxd; ++i)
         {
             auto ptr = vin[i].c_str();
-            for (int j=0; j< maxw; ++j)//auto itr = vi.begin(); itr != vi.end(); ++itr)
+            for (int j = 0; j < maxw; ++j)//auto itr = vi.begin(); itr != vi.end(); ++itr)
             {
                 cout << "  " << ptr[j];
 
@@ -269,19 +323,84 @@ int main(int argc, char**argv)
                 sqb.blockdata[facing::east] = dbE;
                 sqb.blockdata[facing::south] = dbS;
                 sqb.blockdata[facing::west] = dbW;
-                sqb.blockdata[facing::north]= dbN;
-                
+                sqb.blockdata[facing::north] = dbN;
+
                 ground[gid] = std::move(sqb);
                 ++gid;
             }
             cout << "\n   ";
         }
-        
+
         cout << "\n\n";
         cout << "The bulldozer is currently located at the Northern edge of the site, \nimmediately to the West of the site, and facing East.\n\n";
     }
+    else 
+        cout << "Unable to open file : " << fp;
 
-    else cout << "Unable to open file";
+}
+
+void movebulldozer(int steps) 
+{
+
+}
+
+void changebulldozerdirectiontoleft()
+{
+
+}
+void changebulldozerdirectiontoright()
+{
+
+}
+void processCmd(string input)
+{
+    string cmd = input.substr(0, input.find(" "));
+
+    if (cmd == "l")
+    {
+        changebulldozerdirectiontoleft();
+    }
+    else if (cmd == "r")
+    {
+        changebulldozerdirectiontoright();
+    }
+    else if (cmd == "a")
+    {
+        string steps = input.substr(input.find(" ") + 1, input.length() - 2);
+        if (steps.length() > 21)
+            return;
+        long long nstep = stoll(steps);
+        cout << "\nadvance " << nstep << endl;
+        movebulldozer(nstep);
+    }
+    else if (cmd == "q")
+    {
+        printinstructions();
+        reportgeneration();
+    }
+    else
+    {
+        cout << "invalid cmd";
+    }
+}
+
+int main(int argc, char**argv) 
+{
+    createground(argv[1]);
+  
+    std::string input;
+
+    do 
+    {
+        std::cout << "\n(l)eft, (r)ight, (a)dvance <n>, (q)uit: ";
+        string input;
+        std::getline(std::cin, input);
+
+
+        processCmd(input);
+
+
+    } while (input != "q");
 
     return 0;
 }
