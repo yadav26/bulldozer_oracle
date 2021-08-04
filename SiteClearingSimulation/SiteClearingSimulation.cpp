@@ -421,6 +421,43 @@ struct bulldozer
         cmdcost.emplace_back(cost);
     }
     
+    void calculate(tGroundLayout& g2c, int totalsteps, int steps, int& ptree, int& loss, int& fuelcost  )
+    {
+        if (g2c[gid][dir].type == 'T')
+        {
+            //We hit a protected tree - terminate simulation.
+            //cout << "\ngid = " << gid << ", block has protected tree\n";
+            ptree = creditCost["destProtectedTree"];
+            tcmdCost cc(loss, fuelcost, ptree);
+            cmdcost.emplace_back(cc);
+            cmdQ.emplace_back("a " + to_string(totalsteps));
+            stringstream s; s << "ProtectedTree hit at :" << gid;
+            throw(s.str());
+        }
+
+        if (g2c[gid][dir].type == 't')
+        {
+            if (steps - 1 > 0)
+            {//we have more steps to move, tresspassing will incur paint damage 
+                loss += creditCost["damageRepair"];
+            }
+            //cleaning or passing a tree unit cost same fuelusage
+            fuelcost += fuelUsage['t'];
+            cout << "\ngid = " << gid << ", paint damage cost : " << creditCost["damageRepair"] << ", fuelcost : " << fuelcost;
+        }
+        else if (g2c[gid][dir].type == 'r')
+        {
+            //cleaning or passing a rocky land cost same fuelusage
+            fuelcost += fuelUsage['r'];
+            cout << "\ngid = " << gid << ", rock cost : " << fuelcost;
+        }
+        else
+        {
+            //plain land 'o'
+            fuelcost += fuelUsage[g2c[gid][dir].type];
+            cout << "\ngid = " << gid << ", plain cost : " << fuelcost;
+        }
+    }
     //Following function will move bulldozer from current position to its new position
     //New position is to find by using the map store created in data preperation - phase. 
     //New position will be the bulldozer current direction & the current units forward index in the bulldozer direction
@@ -441,51 +478,32 @@ struct bulldozer
         {
             //cmdQ empty - no commands issued, first move, bulldozer not cranked. 
             //still more steps but bulldozer already cranked. Next time, cmdQ will not be empty.
-            gid = (cmdQ.empty() && !ifBulldozerCranked )? 0 : g2c[gid][dir].fi;
+            if(cmdQ.empty())
+            {//move bulldozer to 0 as this is first cmd
+                gid = ifBulldozerCranked==false ? 0 : g2c[gid][dir].fi;
+            }
             ifBulldozerCranked = true;
 
+            //peek ahead if a valid positon- if not terminate
             if ( g2c[gid][dir].fi == OUT_OF_BOUNDARY )
             {//this means we are going to cross the boudary - terminate simulation
+                //what is the cost of current unit cleaning ?? we are here because next is OUTOFBOUNDARY
+                //bug fix - ultra corner case
+                calculate(g2c, reqSteps, steps, ptree, loss, fuelcost);
                 tcmdCost cc(loss, fuelcost, ptree);
                 cmdcost.emplace_back(cc);
                 cmdQ.emplace_back("a " + to_string(reqSteps));
+                setblockisvisited(g2c, gid);
                 stringstream s; s << "OUT_OF_BOUNDARY persued at :" << gid;
                 throw(s.str());
             }
 
-            if (g2c[gid][dir].type == 'T')
-            {
-                //We hit a protected tree - terminate simulation.
-                //cout << "\ngid = " << gid << ", block has protected tree\n";
-                ptree = creditCost["destProtectedTree"];
-                tcmdCost cc(loss, fuelcost, ptree);
-                cmdcost.emplace_back(cc);
-                cmdQ.emplace_back("a " + to_string(reqSteps));
-                stringstream s; s<< "ProtectedTree hit at :" << gid;
-                throw(s.str());
+            if (!cmdQ.empty())
+            {//since this is not first cmd and moving bulldozer for new gid
+                gid = g2c[gid][dir].fi;
             }
-            else if (g2c[gid][dir].type == 't' )
-            {
-                if (steps - 1 > 0) 
-                {//we have more steps to move, tresspassing will incur paint damage 
-                    loss += creditCost["damageRepair"];
-                }
-                //cleaning or passing a tree unit cost same fuelusage
-                fuelcost += fuelUsage['t'];
-                cout << "\ngid = " << gid << ", paint damage cost : " << creditCost["damageRepair"] << ", fuelcost : " << fuelcost;
-            }
-            else if (g2c[gid][dir].type == 'r')
-            {
-                //cleaning or passing a rocky land cost same fuelusage
-                fuelcost += fuelUsage['r'];
-                cout << "\ngid = " << gid << ", rock cost : " << fuelcost;
-            }
-            else
-            {
-                //plain land 'o'
-                fuelcost += fuelUsage[g2c[gid][dir].type];
-                cout << "\ngid = " << gid << ", plain cost : " << fuelcost;
-            }
+
+            calculate(g2c, reqSteps, steps, ptree, loss, fuelcost);
 
             //update steps left to move
             --steps;
@@ -571,7 +589,7 @@ int getUnclearBlocks(tGroundLayout& g2c)
 
 void printFinalClearLand(tGroundLayout& g2c)
 {
-    cout << "\n\nFinal layout of the GROUND as below \n\n";
+    cout << "\n\nFinal layout of the GROUND as below.";
     auto sw = std::setw(7); // for titles 
     for (int i = 0; i < maxd; ++i)
     {
@@ -583,7 +601,7 @@ void printFinalClearLand(tGroundLayout& g2c)
                 cout << std::left << gid << "[X] " << std::right;
             else
             {
-                cout << std::left << gid << "[" << g2c[gid][0].type << "] " << std::right;
+                cout << std::left << gid << "[" << g2c[gid][0].type << "]" << std::right;
 
             }
         }
