@@ -8,6 +8,7 @@
 #include <map>
 #include <vector>
 #include <stack>
+#include <algorithm>
 
 using namespace std;
 struct directionblock
@@ -430,7 +431,7 @@ struct bulldozer
             ptree = creditCost["destProtectedTree"];
             tcmdCost cc(loss, fuelcost, ptree);
             cmdcost.emplace_back(cc);
-            cmdQ.emplace_back("a " + to_string(totalsteps));
+            cmdQ.emplace_back("advance " + to_string(totalsteps));
             stringstream s; s << "ProtectedTree hit at :" << gid;
             throw(s.str());
         }
@@ -443,21 +444,22 @@ struct bulldozer
             }
             //cleaning or passing a tree unit cost same fuelusage
             fuelcost += fuelUsage['t'];
-            cout << "\ngid = " << gid << ", paint damage cost : " << creditCost["damageRepair"] << ", fuelcost : " << fuelcost;
+            //cout << "\ngid = " << gid << ", paint damage cost : " << creditCost["damageRepair"] << ", fuelcost : " << fuelcost;
         }
         else if (g2c[gid][dir].type == 'r')
         {
             //cleaning or passing a rocky land cost same fuelusage
             fuelcost += fuelUsage['r'];
-            cout << "\ngid = " << gid << ", rock cost : " << fuelcost;
+            //cout << "\ngid = " << gid << ", rock cost : " << fuelcost;
         }
         else
         {
             //plain land 'o'
             fuelcost += fuelUsage[g2c[gid][dir].type];
-            cout << "\ngid = " << gid << ", plain cost : " << fuelcost;
+            //cout << "\ngid = " << gid << ", plain cost : " << fuelcost;
         }
     }
+
     //Following function will move bulldozer from current position to its new position
     //New position is to find by using the map store created in data preperation - phase. 
     //New position will be the bulldozer current direction & the current units forward index in the bulldozer direction
@@ -492,7 +494,7 @@ struct bulldozer
                 calculate(g2c, reqSteps, steps, ptree, loss, fuelcost);
                 tcmdCost cc(loss, fuelcost, ptree);
                 cmdcost.emplace_back(cc);
-                cmdQ.emplace_back("a " + to_string(reqSteps));
+                cmdQ.emplace_back("advance " + to_string(reqSteps));
                 setblockisvisited(g2c, gid);
                 stringstream s; s << "OUT_OF_BOUNDARY persued at :" << gid;
                 throw(s.str());
@@ -648,6 +650,9 @@ void reportgeneration(tGroundLayout&g2c)
 
 void processCmd(tGroundLayout& g2c, string input)
 {
+    input.erase(0, input.find_first_not_of(' '));
+    input.erase(input.find_last_not_of(' ') + 1);
+
     string cmd = input.substr(0, input.find(" "));
 
     if (cmd == "l" || cmd == "L")
@@ -661,13 +666,20 @@ void processCmd(tGroundLayout& g2c, string input)
     else if (cmd == "a"|| cmd == "A")
     {
         string steps = input.substr(input.find(" ") + 1, input.length() - 2);
-        if (steps.length() > 21)
+
+        steps.erase(0, steps.find_first_not_of(' '));
+        steps.erase(steps.find_last_not_of(' ') + 1);
+
+        if (steps.empty() || steps.length() > 21)//hypothetical longlong
+        {
+            cout << "ERR- Invalid params.e.g. a 4\n";
             return;
+        }
         char* p;
         long nstep = strtoll (steps.c_str(), &p, 10);
         if (*p)
         {
-            cout << "\nInvalid advance command params.e.g. a 4\n";
+            cout << "ERR- Invalid params.e.g. a 4\n";
             return;
         }
 
@@ -680,7 +692,7 @@ void processCmd(tGroundLayout& g2c, string input)
     }
     else
     {
-        cout << "invalid cmd";
+        cout << "Err - invalid cmd\n";
     }
 }
 int main(int argc, char**argv) 
@@ -692,9 +704,10 @@ int main(int argc, char**argv)
     std::string input;
     try 
     {
+        cout << endl;
         do
         {
-            std::cout << "\n(l)eft, (r)ight, (a)dvance <n>, (q)uit: ";
+            std::cout << "(l)eft, (r)ight, (a)dvance <n>, (q)uit: ";
             std::getline(std::cin, input);
 
             processCmd(g2c, input);
