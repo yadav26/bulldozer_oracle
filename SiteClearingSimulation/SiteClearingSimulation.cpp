@@ -109,7 +109,7 @@ directionblock findallfourE(int dir, int gidx, int maxc, int maxr)
     if (col == 0)
     {
         b = OUT_OF_BOUNDARY;
-        f = gidx + 1;
+        f = gidx + 1 > maxc -1 ? -1: gidx +1 ;
     }
     else if (col + 1 >= maxc)
     {
@@ -125,7 +125,7 @@ directionblock findallfourE(int dir, int gidx, int maxc, int maxr)
     if (row == 0)
     {
         l = OUT_OF_BOUNDARY;
-        r = ((row + 1) * maxc) + (gidx % maxc);
+        r = row + 1 > maxr - 1 ? -1:((row + 1) * maxc) + (gidx % maxc);
     }
     else if (row + 1 >= maxr)
     {
@@ -162,7 +162,7 @@ directionblock findallfourS(int dir, int gidx, int maxc, int maxr)
     if (col == 0)
     {
         r = OUT_OF_BOUNDARY;
-        l = gidx + 1;
+        l = gidx + 1 > maxc-1 ? -1: gidx + 1;
     }
     else if (col + 1 >= maxc)
     {
@@ -178,7 +178,7 @@ directionblock findallfourS(int dir, int gidx, int maxc, int maxr)
     if (row == 0)
     {
         b = OUT_OF_BOUNDARY;
-        f = ((row + 1) * maxc) + (gidx % maxc);
+        f = row + 1 > maxr - 1 ? -1 : ((row + 1) * maxc) + (gidx % maxc);
     }
     else if (row + 1 >= maxr)
     {
@@ -207,7 +207,7 @@ directionblock findallfourW(int dir, int gidx, int maxc, int maxr)
     if (col == 0)
     {
         f = OUT_OF_BOUNDARY;
-        b = gidx + 1;
+        b = gidx + 1 > maxc-1? -1:gidx+1;
     }
     else if (col + 1 >= maxc)
     {
@@ -223,7 +223,7 @@ directionblock findallfourW(int dir, int gidx, int maxc, int maxr)
     if (row == 0)
     {
         r = OUT_OF_BOUNDARY;
-        l = ((row + 1) * maxc) + (gidx % maxc);
+        l = row + 1 > maxr - 1 ? -1 : ((row + 1) * maxc) + (gidx % maxc);
     }
     else if (row + 1 >= maxr)
     {
@@ -258,7 +258,7 @@ directionblock findallfourN(int dir, int gidx, int maxc, int maxr)
     if (col == 0)
     {
         l = OUT_OF_BOUNDARY;
-        r = gidx + 1;
+        r = gidx + 1 > maxc-1? -1:gidx+1;
     }
     else if (col + 1 >= maxc)
     {
@@ -274,7 +274,7 @@ directionblock findallfourN(int dir, int gidx, int maxc, int maxr)
     if (row == 0)
     {
         f = OUT_OF_BOUNDARY;
-        b = ((row + 1) * maxc) + (gidx % maxc);
+        b = row + 1 > maxr - 1 ? -1 : ((row + 1) * maxc) + (gidx % maxc);
     }
     else if (row + 1 >= maxr)
     {
@@ -392,8 +392,10 @@ struct bulldozer
     }
 
     //Set squar unit is cleaned/visited, update type to o/c
-    void setblockisvisited(tGroundLayout& g2c, int gid)
+    void setblockisvisited(tGroundLayout& g2c)
     {
+        if (gid == OUT_OF_BOUNDARY)
+            return;
         g2c[gid][0].bIsvisited = true;
         g2c[gid][1].bIsvisited = true;
         g2c[gid][2].bIsvisited = true;
@@ -476,42 +478,52 @@ struct bulldozer
         int ptree = 0;
         int reqSteps = steps;
         bool ifBulldozerCranked = false;
-        while (steps > 0 )
+        while (steps > 0  )
         {
             //cmdQ empty - no commands issued, first move, bulldozer not cranked. 
             //still more steps but bulldozer already cranked. Next time, cmdQ will not be empty.
             if(cmdQ.empty())
             {//move bulldozer to 0 as this is first cmd
                 gid = ifBulldozerCranked==false ? 0 : g2c[gid][dir].fi;
+                if (gid == OUT_OF_BOUNDARY)
+                {
+                    tcmdCost cc(loss, fuelcost, ptree);
+                    cmdcost.emplace_back(cc);
+                    cmdQ.emplace_back("advance " + to_string(reqSteps));
+                    stringstream s; s << "OUT_OF_BOUNDARY persued at :" << gid;
+                    throw(s.str());
+                }
+                calculate(g2c, reqSteps, steps, ptree, loss, fuelcost);
+                ifBulldozerCranked = true;
+                //update steps left to move
+                --steps;
+                setblockisvisited(g2c);
+                continue;
             }
-            ifBulldozerCranked = true;
+            
 
             //peek ahead if a valid positon- if not terminate
             if ( g2c[gid][dir].fi == OUT_OF_BOUNDARY )
             {//this means we are going to cross the boudary - terminate simulation
                 //what is the cost of current unit cleaning ?? we are here because next is OUTOFBOUNDARY
                 //bug fix - ultra corner case
-                calculate(g2c, reqSteps, steps, ptree, loss, fuelcost);
+                //calculate(g2c, reqSteps, steps, ptree, loss, fuelcost);
                 tcmdCost cc(loss, fuelcost, ptree);
                 cmdcost.emplace_back(cc);
                 cmdQ.emplace_back("advance " + to_string(reqSteps));
-                setblockisvisited(g2c, gid);
+                setblockisvisited(g2c);
                 stringstream s; s << "OUT_OF_BOUNDARY persued at :" << gid;
                 throw(s.str());
             }
 
-            if (!cmdQ.empty())
-            {//since this is not first cmd and moving bulldozer for new gid
-                gid = g2c[gid][dir].fi;
-            }
-
+            //move bulldozer to next valid index
+            gid = g2c[gid][dir].fi;
+            //find the cost of this new position cleaning
             calculate(g2c, reqSteps, steps, ptree, loss, fuelcost);
-
-            //update steps left to move
+            //reduce steps 
             --steps;
-            
-            //move bulldozer to new squar block 
-            setblockisvisited(g2c, gid);
+            //clean the block, mark visited
+            setblockisvisited(g2c);
         }
         //store all costs
         tcmdCost cc(loss, fuelcost, ptree);
